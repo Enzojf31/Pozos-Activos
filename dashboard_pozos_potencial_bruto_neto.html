@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PetroDashboard - Gestión & Monitoreo de Pozos</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- SheetJS (xlsx) para lectura y escritura de CSV y Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Chart.js para visualización interactiva -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="h-full flex flex-col text-slate-700 bg-slate-50 antialiased selection:bg-sky-100 selection:text-sky-800">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="bg-sky-600 text-white p-2.5 rounded-xl shadow-md shadow-sky-600/20">
+                    <i class="fa-solid fa-oil-well text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-800 leading-tight">Gestion y monitoreo de pozos</h1>
+                    <p class="text-xs text-slate-500">Gestión & Monitoreo de Pozos</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button type="button" id="btnTriggerUpload" class="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors cursor-pointer">
+                    <i class="fa-solid fa-folder-open text-sky-600"></i>
+                    <span>Cargar 'Reportepozos.csv'</span>
+                </button>
+                <button type="button" id="btnExport" class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all shadow-emerald-600/20 cursor-pointer">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Guardar en Pozos-Activos</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Status Banner / File Upload Section -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <div class="p-3 bg-sky-50 rounded-xl text-sky-600 hidden sm:flex items-center justify-center">
+                        <i class="fa-solid fa-file-csv text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800">Carga de Origen: Reportepozos.csv</h2>
+                        <p class="text-xs text-slate-500">Sube o arrastra el archivo <span class="font-semibold text-slate-700">Reportepozos.csv</span> (o archivos .xlsx) con pozos, potencial, campo y fecha.</p>
+                    </div>
+                </div>
+
+                <!-- Dropzone interactiva corregida -->
+                <label for="fileInput" id="dropzone" class="w-full md:w-auto flex-1 max-w-md border-2 border-dashed border-sky-400 hover:border-sky-600 bg-sky-50/30 hover:bg-sky-50/70 rounded-xl p-4 text-center cursor-pointer transition-all select-none block">
+                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="hidden">
+                    <div class="flex items-center justify-center gap-3 text-slate-700 pointer-events-none">
+                        <i class="fa-solid fa-file-csv text-emerald-600 text-xl"></i>
+                        <span class="text-xs font-medium" id="uploadStatusText">Arrastra <b>Reportepozos.csv</b> aquí o <span class="text-sky-600 font-bold underline">examina</span></span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Banner informativo de estado de carga automática / respaldo -->
+            <div id="statusBanner" class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <div class="flex items-center gap-2.5">
+                    <i id="statusBannerIcon" class="fa-solid fa-spinner fa-spin text-sky-600 text-sm"></i>
+                    <span id="statusBannerMsg" class="text-slate-600 font-medium">Intentando cargar automáticamente <b>./Reportepozos.csv</b> desde el servidor...</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" id="btnLoadSample" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-semibold border border-slate-300 rounded-lg transition-colors cursor-pointer">
+                        <i class="fa-solid fa-database mr-1 text-sky-600"></i> Cargar datos de ejemplo
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPI Cards Summary Grid -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            <!-- Producción real: únicamente pozos activos categoría 1 -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Producción Real (Categoría 1)</p>
+                    <span class="text-xs text-slate-500 font-semibold" id="kpiTotalCount">0 pozos</span>
+                </div>
+                <h3 class="text-2xl font-extrabold text-slate-800 mt-2" id="kpiTotal">0 <span class="text-xs font-normal text-slate-500">BPD</span></h3>
+                <p class="text-[11px] text-slate-400 font-medium mt-1">Solo pozos activos productores de crudo</p>
+                <div class="absolute right-3 bottom-2 text-slate-100 text-3xl pointer-events-none">
+                    <i class="fa-solid fa-oil-well"></i>
+                </div>
+            </div>
+
+            <!-- Pozos Activos -->
+            <div class="bg-white p-4 rounded-2xl border border-emerald-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-white to-emerald-50/40">
+                <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Pozos Activos</p>
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+                <h3 class="text-2xl font-extrabold text-emerald-700 mt-2" id="kpiActivosPot">0 <span class="text-xs font-normal">BPD</span></h3>
+                <p class="text-[11px] text-emerald-600 font-medium mt-1" id="kpiActivosCount">0 pozos activos</p>
+            </div>
+
+            <!-- Pozos Intervenidos (Producción Diferida) -->
+            <div class="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-white to-amber-50/40">
+                <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Diferida (Intervenidos)</p>
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                </div>
+                <h3 class="text-2xl font-extrabold text-amber-700 mt-2" id="kpiIntervenidosPot">0 <span class="text-xs font-normal">BPD</span></h3>
+                <p class="text-[11px] text-amber-600 font-medium mt-1" id="kpiIntervenidosCount">0 pozos intervenidos</p>
+            </div>
+
+            <!-- Pozos Inactivos -->
+            <div class="bg-white p-4 rounded-2xl border border-rose-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-white to-rose-50/40">
+                <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Pozos Inactivos</p>
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                </div>
+                <h3 class="text-2xl font-extrabold text-rose-700 mt-2" id="kpiInactivosPot">0 <span class="text-xs font-normal">BPD</span></h3>
+                <p class="text-[11px] text-rose-600 font-medium mt-1" id="kpiInactivosCount">0 pozos inactivos</p>
+            </div>
+
+            <!-- Potencial bruto y neto, con porcentaje de agua editable -->
+            <div class="bg-white p-4 rounded-2xl border border-sky-200 shadow-sm relative overflow-hidden bg-gradient-to-br from-white via-sky-50/30 to-sky-100/50 sm:col-span-2 lg:col-span-2 flex flex-col justify-between">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[11px] font-bold text-sky-800 uppercase tracking-wider">Potencial de Pozos (Activos + Intervenidos)</p>
+                    <span class="px-2 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-700 rounded-md">BPD Brutos</span>
+                </div>
+                <div class="flex items-baseline justify-between mt-2 gap-2">
+                    <div>
+                        <p class="text-[10px] text-slate-500 font-semibold">Potencial bruto</p>
+                        <h3 class="text-2xl font-black text-sky-900" id="kpiPotencialTotal">0 <span class="text-xs font-normal">BPD</span></h3>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] text-emerald-700 font-semibold">Potencial neto</p>
+                        <h3 class="text-xl font-extrabold text-emerald-700" id="kpiPotencialNeto">0 <span class="text-xs font-normal">BPD</span></h3>
+                    </div>
+                </div>
+                <div class="flex items-end justify-between gap-3 mt-2">
+                    <label for="waterCutInput" class="text-[10px] font-semibold text-slate-600 leading-tight">Porcentaje de agua en el crudo (%)</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="waterCutInput" min="0" max="100" step="0.1" value="0"
+                               aria-label="Porcentaje de agua en el crudo"
+                               class="w-20 px-2 py-1 text-xs text-right font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <span class="text-xs font-bold text-slate-500">%</span>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1" id="kpiDiferidoTotalSummary">
+                    Diferida (Intervenidos): <span class="text-amber-600 font-bold">0 BPD</span>
+                </p>
+                <div class="mt-2">
+                    <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex">
+                        <div id="barPctActivo" class="bg-emerald-500 h-full transition-all duration-500" style="width: 0%" title="Pozos Activos"></div>
+                        <div id="barPctIntervenido" class="bg-amber-400 h-full transition-all duration-500" style="width: 0%" title="Diferida (Pozos Intervenidos)"></div>
+                        <div id="barPctInactivo" class="bg-rose-500 h-full transition-all duration-500" style="width: 0%" title="Pozos Inactivos"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-medium">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Activos</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Diferida (Interv.)</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span> Inactivos</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Interactive Filters Toolbar -->
+        <section class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-sky-600"></i> Filtros de Datos
+                </h3>
+                <button type="button" id="btnResetFilters" class="text-xs text-sky-600 hover:text-sky-800 font-semibold hidden cursor-pointer">
+                    <i class="fa-solid fa-xmark mr-1"></i>Limpiar Filtros
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Search Box -->
+                <div>
+                    <label for="filterSearch" class="block text-[11px] font-semibold text-slate-500 mb-1">Búsqueda General</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="filterSearch" placeholder="Nombre de pozo o ubicación..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+
+                <!-- Estado Filter -->
+                <div>
+                    <label for="filterEstado" class="block text-[11px] font-semibold text-slate-500 mb-1">Estado del Pozo</label>
+                    <select id="filterEstado" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all">
+                        <option value="">Todos los estados</option>
+                        <option value="Activo">Activos</option>
+                        <option value="Inactivo">Inactivos</option>
+                        <option value="Intervenido">Intervenidos</option>
+                    </select>
+                </div>
+
+                <!-- Campo Filter -->
+                <div>
+                    <label for="filterCampo" class="block text-[11px] font-semibold text-slate-500 mb-1">Campo Petrolero</label>
+                    <select id="filterCampo" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all">
+                        <option value="">Todos los campos</option>
+                    </select>
+                </div>
+
+                <!-- Range Fechas -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Fecha Intervención (Desde - Hasta)</label>
+                    <div class="flex items-center gap-1">
+                        <input type="date" id="filterFechaInicio" class="w-1/2 px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <span class="text-slate-400 text-xs">-</span>
+                        <input type="date" id="filterFechaFin" class="w-1/2 px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Interactive Section Grid -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Interactive Combo Chart (Potencial vs Intervenciones en Tiempo Real) -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm lg:col-span-3">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line text-sky-600"></i> Análisis Dual en Tiempo Real: Potencial vs Intervenciones
+                        </h3>
+                        <p class="text-xs text-slate-500">Compara producción real de pozos activos, potencial bruto, producción diferida y cantidad de pozos intervenidos</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label for="selectChartGroup" class="text-xs text-slate-500 font-medium">Agrupar por:</label>
+                        <select id="selectChartGroup" class="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+                            <option value="fecha">Línea de Tiempo (Mes/Año)</option>
+                            <option value="campo">Campo Petrolero</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="relative w-full h-72">
+                    <canvas id="chartComboRealTime"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Estado Pie/Doughnut -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-sky-600"></i> Distribución por Estado
+                    </h3>
+                </div>
+                <div class="relative w-full h-64 flex items-center justify-center">
+                    <canvas id="chartEstado"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 3: Potencial por Campo (Bar) -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm lg:col-span-2 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-sky-600"></i> Producción por Categoría y Campo (BPD)
+                    </h3>
+                </div>
+                <div class="relative w-full h-64">
+                    <canvas id="chartCampos"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Detailed Data Table Section -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <!-- Table Header Bar -->
+            <div class="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-800">Detalle de Pozos</h3>
+                    <p class="text-xs text-slate-500">Lista completa y filtrada de activos petroleros</p>
+                </div>
+                <div class="text-xs text-slate-500">
+                    Mostrando <span id="tableCount" class="font-bold text-slate-700">0</span> de <span id="tableTotalCount" class="font-bold text-slate-700">0</span> registros
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider select-none">
+                        <tr>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('pozo')">
+                                Pozo <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('campo')">
+                                Campo <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('ubicacion')">
+                                Ubicación / Macolla <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('estado')">
+                                Estado <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="py-3 px-4 text-right cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('potencial')">
+                                Potencial (BPD) <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('fecha')">
+                                Fecha Intervención <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <!-- Filas generadas dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Pagination Footer -->
+            <div class="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div class="text-xs text-slate-500">
+                    Página <span id="currentPageNum" class="font-bold text-slate-700">1</span> de <span id="totalPagesNum" class="font-bold text-slate-700">1</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btnPrevPage" class="px-3 py-1.5 text-xs bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm cursor-pointer">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Anterior
+                    </button>
+                    <button type="button" id="btnNextPage" class="px-3 py-1.5 text-xs bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm cursor-pointer">
+                        Siguiente <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Notificación Toast Flotante -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300 ease-out bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 pointer-events-none">
+        <i id="toastIcon" class="fa-solid fa-circle-info text-sky-400"></i>
+        <span id="toastMessage" class="text-xs font-medium">Notificación</span>
+    </div>
+
+    <!-- Script Principal de Lógica -->
+    <script>
+        const REPO_NAME = 'Pozos-Activos';
+        const DEFAULT_FILE_NAME = 'Reportepozos.csv';
+
+        // Datos de ejemplo para respaldo inmediato
+        const sampleWellsData = [
+            { pozo: 'MCH-01', campo: 'Mene Grande', ubicacion: 'Bloque A - Zulia', estado: 'Activo', potencial: 1250, fecha: '2024-01-12' },
+            { pozo: 'MCH-02', campo: 'Mene Grande', ubicacion: 'Bloque A - Zulia', estado: 'Activo', potencial: 980, fecha: '2024-02-05' },
+            { pozo: 'MCH-03', campo: 'Mene Grande', ubicacion: 'Bloque B - Zulia', estado: 'Inactivo', potencial: 420, fecha: '2023-04-18' },
+            { pozo: 'LL-501', campo: 'Tia Juana', ubicacion: 'Lago Norte', estado: 'Activo', potencial: 2100, fecha: '2024-03-15' },
+            { pozo: 'LL-502', campo: 'Tia Juana', ubicacion: 'Lago Norte', estado: 'Intervenido', potencial: 650, fecha: '2024-04-20' },
+            { pozo: 'LL-503', campo: 'Tia Juana', ubicacion: 'Lago Sur', estado: 'Inactivo', potencial: 510, fecha: '2023-08-30' },
+            { pozo: 'OF-101', campo: 'Oficina', ubicacion: 'Anzoátegui Central', estado: 'Activo', potencial: 1850, fecha: '2024-01-01' },
+            { pozo: 'OF-102', campo: 'Oficina', ubicacion: 'Anzoátegui Central', estado: 'Intervenido', potencial: 720, fecha: '2024-05-10' },
+            { pozo: 'OF-103', campo: 'Oficina', ubicacion: 'Anzoátegui Sur', estado: 'Activo', potencial: 1420, fecha: '2024-02-11' },
+            { pozo: 'OF-104', campo: 'Oficina', ubicacion: 'Anzoátegui Sur', estado: 'Inactivo', potencial: 390, fecha: '2023-05-14' },
+            { pozo: 'FUR-01', campo: 'Furrial', ubicacion: 'Monagas Norte', estado: 'Activo', potencial: 3400, fecha: '2024-03-28' },
+            { pozo: 'FUR-02', campo: 'Furrial', ubicacion: 'Monagas Norte', estado: 'Activo', potencial: 2900, fecha: '2024-04-19' },
+            { pozo: 'FUR-03', campo: 'Furrial', ubicacion: 'Monagas Este', estado: 'Intervenido', potencial: 1100, fecha: '2024-05-02' },
+            { pozo: 'CAR-12', campo: 'Carito', ubicacion: 'Monagas Oeste', estado: 'Activo', potencial: 1950, fecha: '2024-02-22' },
+            { pozo: 'CAR-15', campo: 'Carito', ubicacion: 'Monagas Oeste', estado: 'Inactivo', potencial: 480, fecha: '2023-11-01' },
+        ];
+
+        // Estado global de la aplicación
+        let rawWellsData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        const pageSize = 8;
+        let sortColumn = 'pozo';
+        let sortAsc = true;
+
+        // Instancias de gráficos Chart.js
+        let chartEstadoInstance = null;
+        let chartCamposInstance = null;
+        let chartComboInstance = null;
+
+        // Inicialización al cargar el DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFileInteractions();
+            setupFilterListeners();
+            setupPaginationListeners();
+
+            document.getElementById('selectChartGroup').addEventListener('change', () => {
+                renderChartCombo();
+            });
+
+            document.getElementById('btnLoadSample').addEventListener('click', () => {
+                loadDataset([...sampleWellsData], 'Datos de ejemplo precargados', 'success');
+            });
+
+            document.getElementById('btnExport').addEventListener('click', exportToRepoPozosActivos);
+            document.getElementById('waterCutInput').addEventListener('input', () => {
+                updateKPIs();
+            });
+
+            // Renderizado inicial vacío mientras se intenta fetch automático
+            applyFilters();
+            attemptAutoFetchCSV();
+        });
+
+        // --- 1. Carga Automática desde GitHub Pages (./Reportepozos.csv) ---
+        async function attemptAutoFetchCSV() {
+            const banner = document.getElementById('statusBanner');
+            const bannerIcon = document.getElementById('statusBannerIcon');
+            const bannerMsg = document.getElementById('statusBannerMsg');
+
+            try {
+                // Añadir timestamp para evitar caché vieja de GitHub Pages
+                const response = await fetch(`./${DEFAULT_FILE_NAME}?t=${Date.now()}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const csvText = await response.text();
+                if (!csvText || !csvText.trim()) {
+                    throw new Error('Archivo vacío');
+                }
+
+                const parsed = parseCSVOrExcelText(csvText);
+                if (parsed.length === 0) {
+                    throw new Error('Sin filas válidas');
+                }
+
+                loadDataset(parsed, `Sincronizado automáticamente desde ./${DEFAULT_FILE_NAME} (${parsed.length} pozos)`, 'success');
+                document.getElementById('uploadStatusText').innerHTML = `Activo: <b>${DEFAULT_FILE_NAME}</b> (${parsed.length} pozos) · <span class="text-sky-600 font-bold underline">Cambiar archivo</span>`;
+
+            } catch (err) {
+                // Si falla el fetch (ej. vista previa local sin servidor o archivo aún no subido), mostrar aviso amigable
+                banner.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-xs';
+                bannerIcon.className = 'fa-solid fa-circle-exclamation text-amber-600 text-sm';
+                bannerMsg.innerHTML = `No se detectó <b>./${DEFAULT_FILE_NAME}</b> automáticamente. Haz clic en el recuadro azul de arriba para seleccionar tu archivo CSV/Excel o carga los datos de prueba.`;
+            }
+        }
+
+        // --- 2. Eventos de Selección y Arrastre de Archivos (Corregido y robusto) ---
+        function setupFileInteractions() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+            const btnTriggerUpload = document.getElementById('btnTriggerUpload');
+
+            // Botón superior "Cargar 'Reportepozos.csv'" abre directamente el selector
+            btnTriggerUpload.addEventListener('click', () => {
+                fileInput.value = '';
+                fileInput.click();
+            });
+
+            // Limpiar valor antes de abrir para permitir recargar el mismo archivo si se edita
+            fileInput.addEventListener('click', () => {
+                fileInput.value = '';
+            });
+
+            // Cambio en el input file
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    processUploadedFile(e.target.files[0]);
+                }
+            });
+
+            // Prevenir comportamiento por defecto en toda la ventana al arrastrar archivos
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            // Efectos visuales al arrastrar sobre la zona
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => {
+                    dropzone.classList.add('border-sky-600', 'bg-sky-100/70', 'scale-[1.01]');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => {
+                    dropzone.classList.remove('border-sky-600', 'bg-sky-100/70', 'scale-[1.01]');
+                }, false);
+            });
+
+            // Soltar archivo en la dropzone
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                if (dt && dt.files && dt.files.length > 0) {
+                    processUploadedFile(dt.files[0]);
+                }
+            }, false);
+        }
+
+        function processUploadedFile(file) {
+            const fileName = file.name;
+            const statusText = document.getElementById('uploadStatusText');
+            statusText.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1 text-sky-600"></i> Procesando <b>${escapeHtml(fileName)}</b>...`;
+
+            const isCSV = fileName.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+
+            if (isCSV) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const textContent = e.target.result;
+                        const parsed = parseCSVOrExcelText(textContent);
+                        if (!parsed || parsed.length === 0) {
+                            throw new Error('No se encontraron registros válidos en el CSV.');
+                        }
+                        loadDataset(parsed, `Archivo cargado: ${fileName} (${parsed.length} pozos)`, 'success');
+                        statusText.innerHTML = `Cargado: <b>${escapeHtml(fileName)}</b> (${parsed.length} pozos) · <span class="text-sky-600 font-bold underline">Cambiar</span>`;
+                    } catch (err) {
+                        console.error(err);
+                        showToast(`Error al leer ${fileName}: verifica las columnas`, 'error');
+                        statusText.innerHTML = `Arrastra <b>${DEFAULT_FILE_NAME}</b> aquí o <span class="text-sky-600 font-bold underline">examina</span>`;
+                    }
+                };
+                reader.onerror = () => {
+                    showToast('No se pudo leer el archivo seleccionado', 'error');
+                };
+                // Leer como texto UTF-8 (soporta acentos y ñ)
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                // Procesar archivos Excel (.xlsx / .xls) con SheetJS
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                        const parsed = normalizeRows(jsonData);
+                        if (!parsed || parsed.length === 0) {
+                            throw new Error('Hoja de Excel vacía');
+                        }
+                        loadDataset(parsed, `Archivo Excel cargado: ${fileName} (${parsed.length} pozos)`, 'success');
+                        statusText.innerHTML = `Cargado: <b>${escapeHtml(fileName)}</b> (${parsed.length} pozos) · <span class="text-sky-600 font-bold underline">Cambiar</span>`;
+                    } catch (err) {
+                        console.error(err);
+                        showToast(`Error al procesar el archivo Excel ${fileName}`, 'error');
+                        statusText.innerHTML = `Arrastra <b>${DEFAULT_FILE_NAME}</b> aquí o <span class="text-sky-600 font-bold underline">examina</span>`;
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        // --- Parser inteligente para CSV con coma (,) o punto y coma (;) ---
+        function parseCSVOrExcelText(csvText) {
+            // Eliminar BOM si existe
+            const cleanText = csvText.replace(/^\uFEFF/, '').trim();
+            if (!cleanText) return [];
+
+            // Detectar delimitador predominante en la primera línea (; o ,)
+            const firstLine = cleanText.split(/\r?\n/)[0] || '';
+            const semicolonCount = (firstLine.match(/;/g) || []).length;
+            const commaCount = (firstLine.match(/,/g) || []).length;
+            const delimiter = semicolonCount > commaCount ? ';' : ',';
+
+            // Usar SheetJS para parsear respetando comillas y delimitador detectado
+            const workbook = XLSX.read(cleanText, { type: 'string', FS: delimiter, cellDates: true });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+
+            return normalizeRows(jsonRows);
+        }
+
+        // Normalización insensible a mayúsculas y acentos
+        function normalizeHeaderKey(str) {
+            return String(str)
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function normalizeRows(jsonData) {
+            if (!Array.isArray(jsonData)) return [];
+
+            return jsonData
+                .filter(row => Object.values(row).some(v => String(v).trim() !== ''))
+                .map((row, index) => {
+                    const keys = Object.keys(row);
+                    const findVal = (keywords) => {
+                        const matchedKey = keys.find(k => {
+                            const normK = normalizeHeaderKey(k);
+                            return keywords.some(kw => normK === kw || normK.includes(kw));
+                        });
+                        return matchedKey !== undefined ? row[matchedKey] : '';
+                    };
+
+                    const pozoRaw = findVal(['pozo', 'nombre', 'well', 'identificador', 'id']);
+                    const campoRaw = findVal(['campo', 'field', 'area', 'yacimiento']);
+                    const ubicacionRaw = findVal(['ubicacion', 'macolla', 'location', 'bloque', 'coordenada', 'sector']);
+                    const estadoRaw = normalizeHeaderKey(findVal(['estado', 'status', 'condicion', 'estatus']));
+                    const potencialRaw = findVal(['potencial', 'bpd', 'produccion', 'prod', 'bbl', 'tasa']);
+                    const fechaRaw = findVal(['fecha', 'intervencion', 'date', 'trabajo']);
+
+                    const pozo = String(pozoRaw).trim() || `POZO-${index + 1}`;
+                    const campo = String(campoRaw).trim() || 'Sin Campo';
+                    const ubicacion = String(ubicacionRaw).trim() || 'General';
+
+                    // Clasificar primero los estados negativos/especiales.
+                    // "inactivo" contiene la cadena "activo", por eso debe evaluarse antes.
+                    let estado = 'Inactivo';
+                    if (estadoRaw.includes('inac') || estadoRaw.includes('cerr') || estadoRaw.includes('difer')) {
+                        estado = 'Inactivo';
+                    } else if (estadoRaw.includes('inter') || estadoRaw.includes('manten') || estadoRaw.includes('serv') || estadoRaw.includes('rehab')) {
+                        estado = 'Intervenido';
+                    } else if (estadoRaw.includes('act') || estadoRaw.includes('prod') || estadoRaw.includes('oper')) {
+                        estado = 'Activo';
+                    }
+
+                    // Limpiar formato numérico (ej. "1.250,50" o "1,250" o "1250 BPD")
+                    let numStr = String(potencialRaw).replace(/[^\d.,-]/g, '').trim();
+                    if (numStr.includes(',') && numStr.includes('.')) {
+                        numStr = numStr.replace(/\./g, '').replace(',', '.');
+                    } else if (numStr.includes(',')) {
+                        // Si hay una sola coma y 3 dígitos después, suele ser separador de miles
+                        const parts = numStr.split(',');
+                        numStr = (parts[1] && parts[1].length === 3) ? numStr.replace(',', '') : numStr.replace(',', '.');
+                    }
+                    const potencialVal = parseFloat(numStr);
+                    const potencial = isNaN(potencialVal) ? 0 : Math.max(0, Math.round(potencialVal));
+
+                    const fecha = formatFecha(fechaRaw);
+
+                    return { pozo, campo, ubicacion, estado, potencial, fecha };
+                });
+        }
+
+        function formatFecha(dateVal) {
+            if (!dateVal) return '2024-01-01';
+            if (dateVal instanceof Date && !isNaN(dateVal)) {
+                return dateVal.toISOString().split('T')[0];
+            }
+            if (typeof dateVal === 'number') {
+                // Número serial de fecha de Excel
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                const d = new Date(excelEpoch.getTime() + dateVal * 86400000);
+                if (!isNaN(d)) return d.toISOString().split('T')[0];
+            }
+            const str = String(dateVal).trim();
+            // Formato YYYY-MM-DD o YYYY/MM/DD
+            const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+            if (isoMatch) {
+                return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+            }
+            // Formato DD/MM/YYYY o DD-MM-YYYY
+            const latamMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+            if (latamMatch) {
+                return `${latamMatch[3]}-${latamMatch[2].padStart(2, '0')}-${latamMatch[1].padStart(2, '0')}`;
+            }
+            return '2024-01-01';
+        }
+
+        function loadDataset(data, message, statusType = 'success') {
+            rawWellsData = data;
+            currentPage = 1;
+            populateCampoDropdown();
+            applyFilters();
+
+            const banner = document.getElementById('statusBanner');
+            const bannerIcon = document.getElementById('statusBannerIcon');
+            const bannerMsg = document.getElementById('statusBannerMsg');
+
+            banner.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs';
+            bannerIcon.className = 'fa-solid fa-circle-check text-emerald-600 text-sm';
+            bannerMsg.innerHTML = `<span class="text-emerald-900 font-semibold">${escapeHtml(message)}</span>`;
+
+            showToast(message, statusType);
+        }
+
+        // --- 3. Filtros Dinámicos ---
+        function populateCampoDropdown() {
+            const campoSelect = document.getElementById('filterCampo');
+            const currentVal = campoSelect.value;
+            const campos = [...new Set(rawWellsData.map(item => item.campo))].sort();
+
+            campoSelect.innerHTML = '<option value="">Todos los campos</option>';
+            campos.forEach(campo => {
+                const opt = document.createElement('option');
+                opt.value = campo;
+                opt.textContent = campo;
+                campoSelect.appendChild(opt);
+            });
+
+            if (campos.includes(currentVal)) {
+                campoSelect.value = currentVal;
+            }
+        }
+
+        function setupFilterListeners() {
+            const inputs = ['filterSearch', 'filterEstado', 'filterCampo', 'filterFechaInicio', 'filterFechaFin'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', () => {
+                    currentPage = 1;
+                    applyFilters();
+                    toggleResetFilterButton();
+                });
+            });
+
+            document.getElementById('btnResetFilters').addEventListener('click', () => {
+                inputs.forEach(id => {
+                    document.getElementById(id).value = '';
+                });
+                currentPage = 1;
+                applyFilters();
+                toggleResetFilterButton();
+            });
+        }
+
+        function toggleResetFilterButton() {
+            const isAnyActive = ['filterSearch', 'filterEstado', 'filterCampo', 'filterFechaInicio', 'filterFechaFin']
+                .some(id => document.getElementById(id).value !== '');
+
+            const btnReset = document.getElementById('btnResetFilters');
+            if (isAnyActive) {
+                btnReset.classList.remove('hidden');
+            } else {
+                btnReset.classList.add('hidden');
+            }
+        }
+
+        function applyFilters() {
+            const searchVal = normalizeHeaderKey(document.getElementById('filterSearch').value);
+            const estadoVal = document.getElementById('filterEstado').value;
+            const campoVal = document.getElementById('filterCampo').value;
+            const fechaInicioVal = document.getElementById('filterFechaInicio').value;
+            const fechaFinVal = document.getElementById('filterFechaFin').value;
+
+            filteredData = rawWellsData.filter(item => {
+                const matchSearch = !searchVal ||
+                    normalizeHeaderKey(item.pozo).includes(searchVal) ||
+                    normalizeHeaderKey(item.ubicacion).includes(searchVal) ||
+                    normalizeHeaderKey(item.campo).includes(searchVal);
+
+                const matchEstado = !estadoVal || item.estado === estadoVal;
+                const matchCampo = !campoVal || item.campo === campoVal;
+
+                let matchDate = true;
+                if (fechaInicioVal && item.fecha < fechaInicioVal) matchDate = false;
+                if (fechaFinVal && item.fecha > fechaFinVal) matchDate = false;
+
+                return matchSearch && matchEstado && matchCampo && matchDate;
+            });
+
+            updateKPIs();
+            renderCharts();
+            renderTable();
+        }
+
+        // --- 4. Cálculo de KPIs ---
+        function updateKPIs() {
+            const totalCount = filteredData.length;
+            const activos = filteredData.filter(d => d.estado === 'Activo');
+            const intervenidos = filteredData.filter(d => d.estado === 'Intervenido');
+            const inactivos = filteredData.filter(d => d.estado === 'Inactivo');
+
+            const bpdActivos = activos.reduce((sum, d) => sum + (d.potencial || 0), 0);
+            const bpdIntervenidos = intervenidos.reduce((sum, d) => sum + (d.potencial || 0), 0);
+            const bpdInactivos = inactivos.reduce((sum, d) => sum + (d.potencial || 0), 0);
+
+            // Producción real: exclusivamente pozos activos (Categoría 1).
+            const totalProduccion = bpdActivos;
+            // Potencial bruto: pozos activos + pozos intervenidos (Categorías 1 y 2).
+            const potencialBruto = bpdActivos + bpdIntervenidos;
+            // El porcentaje de agua se aplica al potencial bruto para obtener el potencial neto de crudo.
+            const waterInput = document.getElementById('waterCutInput');
+            const waterCutPct = Math.min(100, Math.max(0, Number(waterInput.value) || 0));
+            if (Number(waterInput.value) !== waterCutPct) waterInput.value = waterCutPct;
+            const potencialNeto = potencialBruto * (1 - waterCutPct / 100);
+            const produccionDiferida = bpdIntervenidos;
+            const totalCategorias = bpdActivos + bpdIntervenidos + bpdInactivos;
+
+            document.getElementById('kpiTotal').innerHTML = `${totalProduccion.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal text-slate-500">BPD</span>`;
+            document.getElementById('kpiTotalCount').innerText = `${activos.length} pozos activos`;
+
+            document.getElementById('kpiActivosPot').innerHTML = `${bpdActivos.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal">BPD</span>`;
+            document.getElementById('kpiActivosCount').innerText = `${activos.length} pozos activos`;
+
+            document.getElementById('kpiIntervenidosPot').innerHTML = `${produccionDiferida.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal">BPD</span>`;
+            document.getElementById('kpiIntervenidosCount').innerText = `${intervenidos.length} pozos intervenidos`;
+
+            document.getElementById('kpiInactivosPot').innerHTML = `${bpdInactivos.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal">BPD</span>`;
+            document.getElementById('kpiInactivosCount').innerText = `${inactivos.length} pozos inactivos`;
+
+            document.getElementById('kpiPotencialTotal').innerHTML = `${potencialBruto.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal">BPD</span>`;
+            document.getElementById('kpiPotencialNeto').innerHTML = `${potencialNeto.toLocaleString('es-VE', { maximumFractionDigits: 1 })} <span class="text-xs font-normal">BPD</span>`;
+            document.getElementById('kpiDiferidoTotalSummary').innerHTML =
+                `Diferida (Intervenidos): <span class="text-amber-600 font-bold">${produccionDiferida.toLocaleString('es-VE', { maximumFractionDigits: 1 })} BPD</span> · Agua: ${waterCutPct.toLocaleString('es-VE')}%`;
+
+            if (totalCategorias > 0) {
+                document.getElementById('barPctActivo').style.width = `${(bpdActivos / totalCategorias) * 100}%`;
+                document.getElementById('barPctIntervenido').style.width = `${(bpdIntervenidos / totalCategorias) * 100}%`;
+                document.getElementById('barPctInactivo').style.width = `${(bpdInactivos / totalCategorias) * 100}%`;
+            } else {
+                document.getElementById('barPctActivo').style.width = '0%';
+                document.getElementById('barPctIntervenido').style.width = '0%';
+                document.getElementById('barPctInactivo').style.width = '0%';
+            }
+        }
+
+        // --- 5. Gráficos Interactivos (Chart.js) ---
+        function renderCharts() {
+            renderChartCombo();
+            renderChartEstado();
+            renderChartCampos();
+        }
+
+        function renderChartCombo() {
+            const ctx = document.getElementById('chartComboRealTime').getContext('2d');
+            const groupMode = document.getElementById('selectChartGroup').value;
+
+            const map = {};
+            filteredData.forEach(d => {
+                const key = groupMode === 'fecha'
+                    ? (d.fecha ? d.fecha.substring(0, 7) : 'Sin fecha')
+                    : (d.campo || 'Sin Campo');
+
+                if (!map[key]) {
+                    map[key] = {
+                        activos: 0,
+                        intervenidos: 0,
+                        inactivos: 0,
+                        totalProduccion: 0,
+                        potencialPozos: 0,
+                        diferida: 0,
+                        intervenciones: 0
+                    };
+                }
+
+                const barriles = Number(d.potencial) || 0;
+
+                if (d.estado === 'Activo') {
+                    map[key].totalProduccion += barriles;
+                    map[key].activos += barriles;
+                    map[key].potencialPozos += barriles;
+                } else if (d.estado === 'Intervenido') {
+                    map[key].intervenidos += barriles;
+                    map[key].potencialPozos += barriles;
+                    map[key].diferida += barriles;
+                    map[key].intervenciones += 1;
+                } else {
+                    map[key].inactivos += barriles;
+                }
+            });
+
+            const labels = Object.keys(map).sort();
+            const totalProduccionData = labels.map(k => map[k].totalProduccion);
+            const potencialData = labels.map(k => map[k].potencialPozos);
+            const diferidaData = labels.map(k => map[k].diferida);
+            const intervencionesData = labels.map(k => map[k].intervenciones);
+
+            if (chartComboInstance) chartComboInstance.destroy();
+
+            chartComboInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels.length ? labels : ['Sin datos'],
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Producción Real (Pozos Activos Categoría 1) (BPD)',
+                            data: totalProduccionData.length ? totalProduccionData : [0],
+                            borderColor: '#0284c7',
+                            backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.3,
+                            pointBackgroundColor: '#0284c7',
+                            pointRadius: 4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Potencial Bruto (Activos + Intervenidos) (BPD)',
+                            data: potencialData.length ? potencialData : [0],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            fill: false,
+                            tension: 0.3,
+                            pointBackgroundColor: '#10b981',
+                            pointRadius: 3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Producción Diferida (Intervenidos) (BPD)',
+                            data: diferidaData.length ? diferidaData : [0],
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 6,
+                            maxBarThickness: 28,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Pozos Intervenidos (Cantidad)',
+                            data: intervencionesData.length ? intervencionesData : [0],
+                            backgroundColor: '#a78bfa',
+                            borderRadius: 6,
+                            maxBarThickness: 18,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { font: { family: 'Inter', size: 10 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    if (context.dataset.yAxisID === 'y1') {
+                                        return ` Pozos intervenidos: ${context.raw} pozos`;
+                                    }
+                                    return ` ${context.dataset.label}: ${Number(context.raw).toLocaleString('es-VE')} BPD`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11 } } },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Producción / Potencial / Diferida (BPD)', font: { size: 10, weight: 'bold' } },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { family: 'Inter', size: 10 } },
+                            beginAtZero: true
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'N° Pozos Intervenidos', font: { size: 10, weight: 'bold' } },
+                            grid: { drawOnChartArea: false },
+                            ticks: { precision: 0, font: { family: 'Inter', size: 10 } },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChartEstado() {
+            const ctx = document.getElementById('chartEstado').getContext('2d');
+            const activos = filteredData.filter(d => d.estado === 'Activo').length;
+            const intervenidos = filteredData.filter(d => d.estado === 'Intervenido').length;
+            const inactivos = filteredData.filter(d => d.estado === 'Inactivo').length;
+
+            if (chartEstadoInstance) chartEstadoInstance.destroy();
+
+            chartEstadoInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Activos', 'Intervenidos', 'Inactivos'],
+                    datasets: [{
+                        data: [activos, intervenidos, inactivos],
+                        backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = total ? Math.round((val / total) * 100) : 0;
+                                    return ` ${context.label}: ${val} pozos (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '66%'
+                }
+            });
+        }
+
+        function renderChartCampos() {
+            const ctx = document.getElementById('chartCampos').getContext('2d');
+
+            const campoMap = {};
+            filteredData.forEach(d => {
+                if (!campoMap[d.campo]) campoMap[d.campo] = { activo: 0, diferida: 0, inactivo: 0 };
+                if (d.estado === 'Activo') {
+                    campoMap[d.campo].activo += (d.potencial || 0);
+                } else if (d.estado === 'Intervenido') {
+                    campoMap[d.campo].diferida += (d.potencial || 0);
+                } else {
+                    campoMap[d.campo].inactivo += (d.potencial || 0);
+                }
+            });
+
+            const labels = Object.keys(campoMap).sort();
+            const activosData = labels.map(k => campoMap[k].activo);
+            const diferidaData = labels.map(k => campoMap[k].diferida);
+            const inactivosData = labels.map(k => campoMap[k].inactivo);
+
+            if (chartCamposInstance) chartCamposInstance.destroy();
+
+            chartCamposInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels.length ? labels : ['Sin Datos'],
+                    datasets: [
+                        {
+                            label: 'Activos (BPD)',
+                            data: activosData.length ? activosData : [0],
+                            backgroundColor: '#10b981',
+                            borderRadius: 6,
+                            maxBarThickness: 24
+                        },
+                        {
+                            label: 'Diferida / Intervenidos (BPD)',
+                            data: diferidaData.length ? diferidaData : [0],
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 6,
+                            maxBarThickness: 24
+                        },
+                        {
+                            label: 'Inactivos (BPD)',
+                            data: inactivosData.length ? inactivosData : [0],
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 6,
+                            maxBarThickness: 24
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { font: { family: 'Inter', size: 11 } } }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { family: 'Inter', size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- 6. Tabla Paginada y Ordenable ---
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortAsc = !sortAsc;
+            } else {
+                sortColumn = column;
+                sortAsc = true;
+            }
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            const sorted = [...filteredData].sort((a, b) => {
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
+                return 0;
+            });
+
+            const totalRecords = sorted.length;
+            const totalPages = Math.ceil(totalRecords / pageSize) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const pageData = sorted.slice(startIndex, startIndex + pageSize);
+
+            document.getElementById('tableCount').innerText = pageData.length;
+            document.getElementById('tableTotalCount').innerText = totalRecords;
+            document.getElementById('currentPageNum').innerText = currentPage;
+            document.getElementById('totalPagesNum').innerText = totalPages;
+
+            document.getElementById('btnPrevPage').disabled = (currentPage <= 1);
+            document.getElementById('btnNextPage').disabled = (currentPage >= totalPages);
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-10 text-slate-400">
+                            <i class="fa-solid fa-folder-open text-2xl mb-2 block"></i>
+                            No hay registros disponibles. Carga un archivo CSV/Excel o usa los datos de ejemplo.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            pageData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition-colors';
+
+                let badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+                let iconClass = 'fa-circle-xmark';
+
+                if (item.estado === 'Activo') {
+                    badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    iconClass = 'fa-circle-check';
+                } else if (item.estado === 'Intervenido') {
+                    badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                    iconClass = 'fa-wrench';
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-slate-800">${escapeHtml(item.pozo)}</td>
+                    <td class="py-3 px-4 text-slate-600">${escapeHtml(item.campo)}</td>
+                    <td class="py-3 px-4 text-slate-500">${escapeHtml(item.ubicacion)}</td>
+                    <td class="py-3 px-4">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${badgeClass}">
+                            <i class="fa-solid ${iconClass} text-[10px]"></i>
+                            ${item.estado}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-bold text-slate-700">${item.potencial.toLocaleString('es-VE')} BPD</td>
+                    <td class="py-3 px-4 text-slate-500">${escapeHtml(item.fecha)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function setupPaginationListeners() {
+            document.getElementById('btnPrevPage').addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderTable();
+                }
+            });
+
+            document.getElementById('btnNextPage').addEventListener('click', () => {
+                const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderTable();
+                }
+            });
+        }
+
+        // --- 7. Exportación CSV con UTF-8 BOM para Pozos-Activos ---
+        function exportToRepoPozosActivos() {
+            if (!filteredData.length) {
+                showToast('No hay datos para exportar al repositorio', 'error');
+                return;
+            }
+
+            const exportFormatted = filteredData.map(d => ({
+                'Pozo': d.pozo,
+                'Campo': d.campo,
+                'Ubicacion': d.ubicacion,
+                'Estado': d.estado,
+                'Potencial_BPD': d.potencial,
+                'Fecha_Intervencion': d.fecha
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportFormatted);
+            const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+
+            // Añadir UTF-8 BOM (\uFEFF) para que Excel abra acentos y ñ correctamente
+            const blob = new Blob(['\uFEFF' + csvOutput], { type: 'text/csv;charset=utf-8;' });
+
+            const dateStr = new Date().toISOString().split('T')[0];
+            const fileName = `${REPO_NAME}_Reportepozos_${dateStr}.csv`;
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(`Exportado para '${REPO_NAME}': ${fileName}`, 'success');
+        }
+
+        // --- Utilidades ---
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        let toastTimeout = null;
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.innerText = message;
+
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+            } else if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-sky-400';
+            }
+
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
